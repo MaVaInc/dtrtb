@@ -203,7 +203,32 @@ async def get_all_allowed_external_ids(session: AsyncSession) -> List[AllowedExt
 
 
 async def add_allowed_external_id(session: AsyncSession, external_id: str) -> AllowedExternalId:
-    """Добавить новый разрешенный external_id"""
+    """
+    Добавить новый разрешенный external_id
+    
+    Если ID уже существует, возвращает существующий объект.
+    Если ID существует, но is_active=False, активирует его.
+    """
+    # Проверяем, существует ли уже такой ID
+    existing = await get_allowed_external_id(session, external_id)
+    if existing:
+        # Если ID существует и активен, возвращаем его
+        return existing
+    
+    # Проверяем, существует ли ID с is_active=False
+    result = await session.execute(
+        select(AllowedExternalId).where(AllowedExternalId.external_id == external_id)
+    )
+    inactive_id = result.scalar_one_or_none()
+    
+    if inactive_id:
+        # Если ID существует, но неактивен, активируем его
+        inactive_id.is_active = True
+        await session.commit()
+        await session.refresh(inactive_id)
+        return inactive_id
+    
+    # Создаем новый ID
     allowed_id = AllowedExternalId(external_id=external_id, is_active=True)
     session.add(allowed_id)
     await session.commit()
