@@ -10,6 +10,7 @@ Middleware выполняются ДО обработчиков и обраба�
 ВАЖНО: Порядок регистрации middleware имеет значение!
 AuthMiddleware должен быть зарегистрирован ПЕРЕД AccessMiddleware.
 """
+import logging
 from typing import Callable, Dict, Any, Awaitable
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject, Message, CallbackQuery
@@ -19,6 +20,8 @@ from database.crud import (
     is_external_id_allowed, link_external_id_to_user, is_external_id_used
 )
 from database.models import User
+
+logger = logging.getLogger(__name__)
 
 
 class AuthMiddleware(BaseMiddleware):
@@ -160,6 +163,8 @@ class AccessMiddleware(BaseMiddleware):
         # Проверяем доступ для обычных пользователей
         # Если у пользователя нет external_id, он должен его ввести
         # Если external_id есть, но дисклеймер не принят, показываем дисклеймер
+        logger.info(f"AccessMiddleware: user_id={db_user.telegram_id}, external_id={db_user.external_id}, is_allowed={db_user.is_allowed}, disclaimer_accepted={db_user.disclaimer_accepted}")
+        
         if db_user.external_id and db_user.is_allowed and not db_user.disclaimer_accepted:
             # Пользователь должен ознакомиться с дисклеймером
             # Пропускаем только callback для принятия дисклеймера
@@ -174,8 +179,11 @@ class AccessMiddleware(BaseMiddleware):
                 return
             elif isinstance(event, Message):
                 # Для сообщений разрешаем только /start
-                from aiogram.filters import CommandStart
-                if not event.text or not event.text.startswith("/start"):
+                is_start_command = event.text and (
+                    event.text.startswith("/start") or 
+                    event.text.strip() == "/start"
+                )
+                if not is_start_command:
                     await event.answer(
                         "📋 Для использования бота необходимо ознакомиться с дисклеймером.\n\n"
                         "Отправьте команду /start для просмотра.",
@@ -187,16 +195,29 @@ class AccessMiddleware(BaseMiddleware):
             # Пользователь еще не ввел external_id
             # Пропускаем только команду /start и обработку ввода external_id
             # Остальные команды блокируем
+            logger.info(f"AccessMiddleware: user_id={db_user.telegram_id} не имеет external_id, проверяем команду")
             if isinstance(event, Message):
                 # Разрешаем только команду /start и обработку ввода external_id
+                # Проверяем команду /start через фильтр
                 from aiogram.filters import CommandStart
-                if not event.text or (not event.text.startswith("/start") and not event.text.isdigit()):
+                is_start_command = event.text and (
+                    event.text.startswith("/start") or 
+                    event.text.strip() == "/start"
+                )
+                is_digit_input = event.text and event.text.strip().isdigit()
+                
+                logger.info(f"AccessMiddleware: is_start_command={is_start_command}, is_digit_input={is_digit_input}, text={event.text}")
+                
+                if not is_start_command and not is_digit_input:
+                    logger.info(f"AccessMiddleware: блокируем сообщение, отправляем ответ")
                     await event.answer(
                         "🔐 Для использования бота необходимо ввести ваш ID.\n\n"
                         "Отправьте команду /start для начала.",
                         parse_mode="HTML"
                     )
                     return
+                else:
+                    logger.info(f"AccessMiddleware: пропускаем команду /start или ввод цифр")
             elif isinstance(event, CallbackQuery):
                 # Для callback'ов показываем alert
                 await event.answer(
@@ -227,9 +248,11 @@ class AccessMiddleware(BaseMiddleware):
                         )
                     return
         
-        # Если is_allowed=False и нет external_id или external_id не разрешен
-        if not db_user.is_allowed:
-            return
-
-        # Доступ разрешен - вызываем следующий обработчик
+        # Если дошли до этого места, значит:
+        # - Либо у пользователя нет external_id (мы уже пропустили /start выше)
+        # - Либо external_id есть и is_allowed=True (доступ разрешен)
+        # - Либо external_id есть, но ID не разрешен (уже обработано выше с return)
+        
+        # Доступ разрешен или это команда /start для нового пользователя - вызываем следующий обработчик
+        logger.info(f"AccessMiddleware: пропускаем событие к обработчику")
         return await handler(event, data)

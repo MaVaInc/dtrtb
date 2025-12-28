@@ -40,6 +40,10 @@ async def cmd_start_auth(message: Message, db_user: User, state: FSMContext, use
     Если у пользователя нет external_id, запрашивает его ввод.
     Если external_id есть, показывает главное меню.
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"Обработчик /start вызван для пользователя {db_user.telegram_id}, external_id={db_user.external_id}, is_allowed={db_user.is_allowed}")
+    
     # Если у пользователя уже есть external_id и доступ, проверяем дисклеймер
     if db_user.external_id and db_user.is_allowed:
         async with async_session_maker() as session:
