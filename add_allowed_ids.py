@@ -55,10 +55,10 @@ async def add_ids_from_file(filename: str = "ids.txt"):
                 
             except Exception as e:
                 if "UNIQUE constraint" in str(e):
-                    print(f"⚠ Уже существует: {external_id}")
+                    print(f"Уже существует: {external_id}")
                     skipped += 1
                 else:
-                    print(f"❌ Ошибка при добавлении {external_id}: {e}")
+                    print(f"Ошибка при добавлении {external_id}: {e}")
                     skipped += 1
     
     print(f"\n✅ Готово!")

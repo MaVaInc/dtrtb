@@ -6,13 +6,7 @@ config.local.py
 *.key
 *.pem
 
-# Базы данных
-*.db
-*.sqlite
-*.sqlite3
-data/
-bot.db
-*.db-journal
+
 
 # Python
 __pycache__/
@@ -66,8 +60,7 @@ logs/
 .dockerignore
 
 # Файлы с ID пользователей (если содержат реальные данные)
-ids.txt
-allowed_ids.txt
+
 
 # Бэкапы
 *.backup

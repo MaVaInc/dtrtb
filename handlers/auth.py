@@ -117,6 +117,9 @@ async def cmd_start_auth(message: Message, db_user: User, state: FSMContext, use
         
         await message.answer(text, parse_mode="HTML")
         await state.set_state(AuthStates.waiting_for_external_id)
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Установлено состояние waiting_for_external_id для пользователя {db_user.telegram_id}")
         return
     
     # Если external_id есть, но доступ не разрешен
@@ -141,6 +144,10 @@ async def process_external_id(message: Message, db_user: User, state: FSMContext
     
     Проверяет ID в базе разрешенных ID и связывает с пользователем.
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"Обработчик process_external_id вызван для пользователя {db_user.telegram_id}, текст: {message.text}")
+    
     external_id = message.text.strip()
     
     # Проверяем формат ID (7-9 цифр)
@@ -261,6 +268,33 @@ async def process_external_id(message: Message, db_user: User, state: FSMContext
             else:  # ru
                 error_text = "❌ Ошибка при привязке ID. Пожалуйста, попробуйте снова."
             await message.answer(error_text, parse_mode="HTML")
+
+
+# Альтернативный обработчик для отладки (если состояние не работает)
+@router.message(F.text.regexp(r'^\d{7,9}$'))
+async def process_external_id_fallback(message: Message, db_user: User, state: FSMContext, user_language: str = "ru"):
+    """
+    Альтернативный обработчик ввода external_id (если FSM состояние не работает)
+    Работает только если у пользователя нет external_id
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Проверяем, что у пользователя нет external_id
+    if db_user.external_id:
+        return  # Пропускаем, если external_id уже есть
+    
+    # Проверяем текущее состояние
+    current_state = await state.get_state()
+    logger.info(f"Fallback обработчик: user_id={db_user.telegram_id}, state={current_state}, text={message.text}")
+    
+    # Если состояние не установлено, устанавливаем его
+    if current_state != AuthStates.waiting_for_external_id.state:
+        await state.set_state(AuthStates.waiting_for_external_id)
+        logger.info(f"Установлено состояние waiting_for_external_id через fallback")
+    
+    # Вызываем основной обработчик
+    await process_external_id(message, db_user, state, user_language)
 
 
 @router.callback_query(F.data == "disclaimer_accepted")
